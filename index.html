@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>From Words to Walk Cycles</title>
+<meta name="description" content="Two routes to eight-direction pixel-art sprites for top-down games and RPGs: a learned 2D generator and a disposable 3D proxy. The 3D route won: no sprite data, eight true directions, about 4.5 minutes per character.">
+<meta name="author" content="Pablo Bustamante">
+<meta property="og:type" content="article">
+<meta property="og:title" content="From Words to Walk Cycles">
+<meta property="og:description" content="Two routes to eight-direction pixel-art sprites for top-down games and RPGs: a learned 2D generator and a disposable 3D proxy. The 3D route won: no sprite data, eight true directions, about 4.5 minutes per character.">
+<meta property="og:image" content="https://facilized-pbustamante.github.io/from-words-to-walk-cycles/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://facilized-pbustamante.github.io/from-words-to-walk-cycles/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://facilized-pbustamante.github.io/from-words-to-walk-cycles/img/og.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,700&family=Source+Sans+3:wght@400;600&family=Pixelify+Sans:wght@500&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+  /* Pagina de proyecto de un paper: columna central, el lago al atardecer manda la paleta (agua de dusk, sol naranja). */
+  :root {
+    --bg: #eef1f5;          /* cielo palido */
+    --panel: #ffffff;
+    --ink: #18202e;         /* azul noche */
+    --ink-2: #566074;
+    --line: #d4d9e2;
+    --accent: #cf5a22;      /* sol del atardecer */
+    --accent-ink: #ffffff;
+    --water: #33476a;       /* el agua de la laguna */
+    --sprite: #e4e8ef;
+    --code-bg: #1b2230;
+    --code-ink: #e6e9ef;
+    --f-title: "Source Serif 4", Georgia, "Times New Roman", serif;
+    --f-body: "Source Sans 3", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-pixel: "Pixelify Sans", "Source Sans 3", system-ui, sans-serif;
+    --f-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #141a24; --panel: #1d2532; --ink: #e7eaf0; --ink-2: #a2abbb; --line: #333d4d;
+      --accent: #f0864a; --accent-ink: #141a24; --water: #8fa6cf; --sprite: #2a3343; --code-bg: #0f141c; --code-ink: #e6e9ef;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #141a24; --panel: #1d2532; --ink: #e7eaf0; --ink-2: #a2abbb; --line: #333d4d;
+    --accent: #f0864a; --accent-ink: #141a24; --water: #8fa6cf; --sprite: #2a3343; --code-bg: #0f141c; --code-ink: #e6e9ef;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.6 var(--f-body); padding-inline: 16px; padding-block: 0 64px; }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  .lectura { max-width: 720px; margin-inline: auto; }
+  header { text-align: center; padding-block: 44px 20px; }
+  .tag { font: 500 13px var(--f-pixel); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+  h1 { font: 700 clamp(34px, 7vw, 58px)/1.02 var(--f-title); margin: 10px 0 8px; text-wrap: balance; }
+  .sub { font: 500 clamp(18px, 3vw, 23px)/1.3 var(--f-title); color: var(--ink-2); margin: 0 auto 18px; max-width: 46ch; text-wrap: balance; }
+  .autor { font-size: 17px; }
+  .autor small { display: block; color: var(--ink-2); font-size: 14.5px; }
+  nav.saltos { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 22px 0 0; }
+  nav.saltos a { font: 600 14px var(--f-body); color: var(--ink); text-decoration: none; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; }
+  nav.saltos a:hover { border-color: var(--accent); color: var(--accent); }
+  nav.saltos a.pdf { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  nav.saltos a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  h2 { font: 700 28px/1.2 var(--f-title); margin: 56px 0 6px; text-wrap: balance; scroll-margin-top: 16px; }
+  h2 + .bajada { color: var(--ink-2); margin: 0 0 18px; }
+  p { margin: 0 0 14px; }
+  figure { margin: 18px 0; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 10px; }
+  figure.plano img { background: #ffffff; }
+  figcaption { font-size: 14.5px; color: var(--ink-2); margin-top: 8px; max-width: 72ch; }
+  .pixel { image-rendering: pixelated; }
+  /* GIFs */
+  .giros { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .giros figure { margin: 0; background: var(--sprite); border-radius: 10px; padding: 6px; min-width: 0; }
+  .giros figure img { border-radius: 6px; }
+  .giros figcaption { text-align: center; margin: 4px 0 2px; font: 500 13px var(--f-pixel); color: var(--ink); }
+  .caminan { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+  .caminan figure { margin: 0; background: var(--sprite); border-radius: 10px; padding: 8px; min-width: 0; }
+  /* cifras */
+  .cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin: 18px 0; }
+  .cifra { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .cifra b { display: block; font: 700 30px/1.1 var(--f-title); color: var(--water); font-variant-numeric: tabular-nums; }
+  .cifra span { font-size: 14px; color: var(--ink-2); }
+  .tabla { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-size: 13px; color: var(--ink-2); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  tr.full td { font-weight: 600; color: var(--accent); }
+  .dos { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; align-items: start; }
+  .dos > * { min-width: 0; }
+  /* paginas */
+  .paginas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .paginas button { padding: 0; border: 1px solid var(--line); border-radius: 6px; background: #ffffff; cursor: zoom-in; overflow: hidden; box-shadow: 0 2px 8px rgb(0 0 0 / .08); }
+  .paginas img { display: block; width: 100%; height: auto; }
+  dialog { border: 0; padding: 0; background: transparent; max-width: min(96vw, 1000px); width: 100%; }
+  dialog::backdrop { background: rgb(10 14 20 / .82); }
+  dialog img { display: block; width: 100%; height: auto; border-radius: 6px; background: #ffffff; }
+  .barra { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .barra button { font: 600 14px var(--f-body); background: var(--panel); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .barra span { color: #e7eaf0; font-size: 14px; }
+  pre { position: relative; background: var(--code-bg); color: var(--code-ink); border-radius: 10px; padding: 14px 16px; padding-right: 90px; overflow-x: auto; font: 13.5px/1.55 var(--f-mono); }
+  .copy { position: absolute; top: 10px; right: 10px; font: 600 13px var(--f-body); background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 6px; padding: 5px 12px; cursor: pointer; }
+  .copy[data-ok="1"] { background: var(--water); color: #ffffff; }
+  footer { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 16px; color: var(--ink-2); font-size: 14px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="tag">Preprint draft · October 2026 · not peer reviewed</div>
+  <h1>From Words to Walk Cycles</h1>
+  <p class="sub">Learned 2D Generation versus Disposable 3D Proxies for Eight-Direction Pixel-Art Sprites</p>
+  <div class="autor">Pablo Bustamante<small>Independent researcher · Chile</small></div>
+  <nav class="saltos" aria-label="Sections">
+    <a href="paper.pdf" class="pdf">Paper (PDF)</a>
+    <a href="#paper">Pages</a>
+    <a href="#turn">Eight directions</a>
+    <a href="#method">Method</a>
+    <a href="#results">Results</a>
+    <a href="#vs2d">Two routes</a>
+    <a href="#outlook">Outlook</a>
+    <a href="#bibtex">BibTeX</a>
+  </nav>
+</header>
+
+<figure class="plano">
+  <img class="pixel" src="img/portada.png" alt="Fourteen pixel-art characters seen from the front in two rows, each labeled" width="1792" height="592">
+  <figcaption>Fourteen characters generated from one-line ideas, front view, covering twelve body plans. Each one exists as an eight-direction sheet with a four-frame walk cycle, produced without any sprite training data.</figcaption>
+</figure>
+
+<div class="lectura">
+  <h2 id="abstract">Abstract</h2>
+  <p>Top-down pixel-art games and RPGs need every character drawn from eight directions with a walk cycle, and the eight drawings must agree with each other. None of the models we tried produces such sheets for new characters consistently. A pipeline does.</p>
+  <p>We followed two routes on two machines. <strong>Route A</strong>, on an NVIDIA RTX 3090, trained three generations of a sprite-sheet generator on 2,984 community sheets: predicting pixel roles instead of colors made creatures legible, but with 2,603 unique designs it memorized after about 30,000 steps. <strong>Route B</strong>, on an Apple M5, routes a one-line idea through a disposable 3D proxy: a local language model rewrites the idea for one of thirteen body plans, FLUX.2 [klein] draws a concept, Pixal3D lifts it to a mesh, Blender rigs and renders eight directions, and a 3D-aware pixelization reduces each frame. <strong>Route B won</strong>: no sprite data, no training, eight true directions, about four and a half minutes per creature.</p>
+</div>
+<div class="cifras">
+  <div class="cifra"><b>8.3 → 3.4%</b><span>isolated-pixel noise vs. a naive downscale</span></div>
+  <div class="cifra"><b>53 → 92%</b><span>visible eyes that stay legible</span></div>
+  <div class="cifra"><b>−33%</b><span>color distance to the concept drawing</span></div>
+  <div class="cifra"><b>0 sprites</b><span>of training data needed by Route B</span></div>
+  <div class="cifra"><b>≈ 4.5 min</b><span>per creature on one Apple M5</span></div>
+</div>
+
+<h2 id="paper">The paper</h2>
+<p class="bajada">Eight pages in ACM conference format. Click a page to read it.</p>
+<div class="paginas" id="paginas">
+  <button type="button" data-n="1"><img src="pag/p-1.jpg" alt="Page 1: title, front-view lineup, abstract and introduction" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="2"><img src="pag/p-2.jpg" alt="Page 2: related work and Route A" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="3"><img src="pag/p-3.jpg" alt="Page 3: Route A figures and Route B pipeline" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="4"><img src="pag/p-4.jpg" alt="Page 4: body plans, animation and pixelization" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="5"><img src="pag/p-5.jpg" alt="Page 5: results and pixelization ablation" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="6"><img src="pag/p-6.jpg" alt="Page 6: prompt writer, speed and application" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="7"><img src="pag/p-7.jpg" alt="Page 7: Route A versus Route B, discussion and conclusion" width="935" height="1210" loading="lazy"></button>
+  <button type="button" data-n="8"><img src="pag/p-8.jpg" alt="Page 8: references" width="935" height="1210" loading="lazy"></button>
+</div>
+<dialog id="visor" aria-label="Paper page">
+  <div class="barra">
+    <button type="button" id="ant">← Previous</button>
+    <span id="num">Page 1 of 8</span>
+    <button type="button" id="sig">Next →</button>
+    <button type="button" id="cerrar">Close</button>
+  </div>
+  <img id="grande" src="pag/g-1.jpg" alt="Paper page" width="1190" height="1540">
+</dialog>
+
+<h2 id="turn">Eight directions, one creature</h2>
+<p class="bajada">The PDF can't move, so here they turn. Each creature rotates through the eight directions of a top-down sprite sheet; because every frame is a render of the same mesh, the shape and markings hold in every direction.</p>
+<div class="giros">
+  <figure><img class="pixel" src="gif/giro_valkiria_v2.gif" alt="Valkyrie centaur turning through eight directions" width="336" height="336" loading="lazy"><figcaption>valkyrie centaur</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_zorro.gif" alt="Fox turning" width="336" height="336" loading="lazy"><figcaption>fox</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_escarabajo.gif" alt="Beetle turning" width="336" height="336" loading="lazy"><figcaption>beetle</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_murcielago.gif" alt="Bat turning with wings spread" width="432" height="432" loading="lazy"><figcaption>bat</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_pulpo.gif" alt="Octopus turning" width="336" height="336" loading="lazy"><figcaption>octopus</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_pez.gif" alt="Fish turning" width="336" height="336" loading="lazy"><figcaption>fish</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_naga.gif" alt="Naga turning" width="336" height="336" loading="lazy"><figcaption>naga</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_golem_v2.gif" alt="Four-armed golem turning" width="288" height="288" loading="lazy"><figcaption>four-armed golem</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_hongo.gif" alt="Mushroom turning" width="288" height="288" loading="lazy"><figcaption>mushroom</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_fantasma.gif" alt="Ghost turning" width="288" height="288" loading="lazy"><figcaption>ghost</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_serpiente.gif" alt="Serpent turning" width="336" height="336" loading="lazy"><figcaption>serpent</figcaption></figure>
+  <figure><img class="pixel" src="gif/giro_centauro_v2.gif" alt="Fawn centaur turning" width="336" height="336" loading="lazy"><figcaption>centaur</figcaption></figure>
+</div>
+<h3 style="font: 700 20px var(--f-title); margin: 28px 0 10px;">Walking in all eight directions at once</h3>
+<div class="caminan">
+  <figure><img class="pixel" src="gif/camina_valkiria_v2.gif" alt="Valkyrie centaur walking in eight directions" width="896" height="448" loading="lazy"></figure>
+  <figure><img class="pixel" src="gif/camina_murcielago.gif" alt="Bat flapping in eight directions" width="1152" height="576" loading="lazy"></figure>
+  <figure><img class="pixel" src="gif/camina_escarabajo.gif" alt="Beetle walking with a tripod gait in eight directions" width="896" height="448" loading="lazy"></figure>
+  <figure><img class="pixel" src="gif/camina_zorro.gif" alt="Fox trotting in eight directions" width="896" height="448" loading="lazy"></figure>
+</div>
+
+<h2 id="method">Method</h2>
+<p class="bajada">Five local stages. The 3D model exists only to turn and animate the creature; it is thrown away once the frames are pixelated.</p>
+<figure class="plano">
+  <img src="img/flujo.jpg" alt="Pipeline: Spanish idea, concept drawing, 3D model, eight rendered directions with depth, and the pixel-art sprite sheet" width="3250" height="580">
+  <figcaption>(a) A two-word Spanish idea is rewritten into an explicit English description for the chosen body plan. (b) FLUX.2 [klein] draws the concept. (c) Pixal3D lifts it to a textured mesh. (d) Blender rigs it and renders 8 directions × 4 frames plus depth. (e) 3D-aware pixelization.</figcaption>
+</figure>
+<div class="dos">
+  <figure class="plano">
+    <img src="img/cuerpos.png" alt="Walk cycles of twelve body plans" width="1616" height="1392" loading="lazy">
+    <figcaption>One gait rule for every leg count: legs are ranked front to back on each side, and those with even rank + side move together. Two legs alternate, four trot, six make the insect tripod.</figcaption>
+  </figure>
+  <div class="lectura" style="margin:18px 0 0">
+    <p><strong>Thirteen body plans, no learned rig.</strong> Legs are found by slicing the mesh horizontally and looking for blobs near the axis; insect legs, which the shell joins into one blob, are separated by a morphological opening seen from above. Serpents, fish, wings and octopus tentacles are animated by deforming vertices directly.</p>
+    <p><strong>Pixelization that knows it came from 3D.</strong> Eyes are found once in a front render, tied to a mesh vertex and projected into every frame, stamped only when the depth pass says nothing covers them. Legs thinner than 1.4 sprite pixels are inflated in the mesh before animating, so they stay continuous. Inner lines come from depth jumps. All 32 frames share one palette, pulled toward the concept's colors per hue group.</p>
+    <p><strong>A writer for ideas in any language.</strong> FLUX alone turned "valkiria centaura" into a horse. A local 27B model translates the idea and spells out the body plan and its iconic features first.</p>
+  </div>
+</div>
+
+<h2 id="results">Results</h2>
+<p class="bajada">Fourteen creatures, twelve body plans. Each pixelization component removed in turn, against a naive downscale with the same palette budget.</p>
+<figure class="plano">
+  <img class="pixel" src="img/galeria.png" alt="Fourteen pixel-art creatures, front and side views" width="1344" height="768" loading="lazy">
+</figure>
+<div class="dos">
+  <div class="tabla">
+    <table>
+      <caption class="sr" style="caption-side: top; text-align: left; padding: 10px 12px 0; font-size: 13px; color: var(--ink-2);">Lower is better, except eyes</caption>
+      <tr><th>Variant</th><th>Noise %</th><th>Fragments</th><th>Eyes %</th><th>Color</th></tr>
+      <tr><td>Naive downscale</td><td>8.29</td><td>0.28</td><td>53.1</td><td>6.54</td></tr>
+      <tr><td>No cleanup</td><td>4.94</td><td>0.03</td><td>91.3</td><td>4.75</td></tr>
+      <tr><td>No projected eyes</td><td>3.27</td><td>0.03</td><td>71.9</td><td>4.50</td></tr>
+      <tr><td>No concept color</td><td>3.35</td><td>0.03</td><td>91.9</td><td>6.16</td></tr>
+      <tr><td>No feature protection</td><td>2.88</td><td>0.03</td><td>91.9</td><td>4.47</td></tr>
+      <tr class="full"><td>Full</td><td>3.36</td><td>0.03</td><td>91.9</td><td>4.40</td></tr>
+    </table>
+  </div>
+  <figure class="plano" style="margin:0">
+    <img class="pixel" src="img/ablacion.png" alt="Five creatures under five pixelization variants" width="1400" height="1300" loading="lazy">
+  </figure>
+</div>
+<figure class="plano">
+  <img src="img/valquiria.jpg" alt="Four concept drawings for valkiria centaura: a horse, a pink bear, an armored centaur and a valkyrie centaur with helmet and spear" width="1470" height="404" loading="lazy">
+  <figcaption>The same idea four ways: raw prompt, a small writer that did not translate, the 27B writer, and the 27B writer asked for headgear, weapons and a side view.</figcaption>
+</figure>
+<div class="dos">
+  <figure class="plano" style="margin:0">
+    <img src="img/velocidad.jpg" alt="The fox's 3D model under three speed settings, nearly identical" width="1140" height="804" loading="lazy">
+    <figcaption>Where the time goes: network passes, not polygons. Six flow steps and no guidance in the shape flows take the 3D step from 324 s to 203 s with an equivalent mesh.</figcaption>
+  </figure>
+  <figure style="margin:0">
+    <img src="img/laguna_detalle.jpg" alt="Close-up of sprites on the grass of the pond scene" width="880" height="700" loading="lazy">
+    <figcaption>The sheets drop straight into an HD-2D scene built with three.js.</figcaption>
+  </figure>
+</div>
+
+<h2 id="vs2d">Two routes, one winner</h2>
+<p class="bajada">Route A learned sprite sheets directly on an NVIDIA RTX 3090 (about 44 GPU hours). Route B used a disposable 3D proxy on an Apple M5. Both ended at the same insight: 3D works as scaffolding, not as the source of the image.</p>
+<figure class="plano">
+  <img src="img/base2d.jpg" alt="Three generations of a 2D sprite generator with the same seeds: colored noise in r1, coherent small creatures in r2 and r3" width="2634" height="1480" loading="lazy">
+  <figcaption>Route A, same three seeds across three generations. Each block is one sheet: five directions × four Walk and four Idle frames. Predicting pixel roles instead of colors (r2, r3) turned confetti into creatures, until the model started memorizing.</figcaption>
+</figure>
+
+<div class="tabla">
+  <table>
+    <tr><th></th><th style="text-align:left">Route A: learned 2D</th><th style="text-align:left">Route B: 3D proxy</th></tr>
+    <tr><td>Hardware</td><td style="text-align:left">NVIDIA RTX 3090</td><td style="text-align:left">Apple M5</td></tr>
+    <tr><td>Training</td><td style="text-align:left">≈ 44 GPU hours</td><td style="text-align:left">none</td></tr>
+    <tr><td>Sprite data</td><td style="text-align:left">2,984 sheets, non-commercial license</td><td style="text-align:left">none</td></tr>
+    <tr><td>New designs</td><td style="text-align:left">memorizes after ≈ 30k steps</td><td style="text-align:left">any idea, any language</td></tr>
+    <tr><td>Directions</td><td style="text-align:left">5 generated + 3 mirrored</td><td style="text-align:left">8 rendered</td></tr>
+    <tr><td>Animation</td><td style="text-align:left">Walk and Idle, learned</td><td style="text-align:left">Walk, rule-based, 13 body plans</td></tr>
+    <tr><td>Style</td><td style="text-align:left">native, real palettes</td><td style="text-align:left">approximated by pixelization</td></tr>
+    <tr class="full"><td>Verdict</td><td style="text-align:left">bounded by its data</td><td style="text-align:left">winner: new, consistent characters today</td></tr>
+  </table>
+</div>
+
+<h2 id="outlook">Outlook</h2>
+<div class="lectura">
+  <p><strong>Art direction without fine-tuning.</strong> FLUX.2 has not been fine-tuned to lock one visual style; the concepts share a style only through a hidden template. Even so, splitting the problem by body plan and covering as many body plans as possible with automatic rigging works well in practice.</p>
+  <p><strong>Learned animation.</strong> A text-driven animation model for arbitrary skeletons, UniMate, was released the day this draft was written. It has not been tested in this version.</p>
+  <p><strong>Toward a single model.</strong> Route A failed for lack of data, and Route B is a data generator. Its sheets, converted to pixel roles and multiplied by donated real palettes (between 36 and 498 distinct color families per creature from 2,602 donors) and by mirroring, could build large datasets per body plan. With them, Route A's original topology could learn to generate art with walk cycles directly. Today there are not enough samples to do that without a pipeline.</p>
+</div>
+
+<h2 id="bibtex">BibTeX</h2>
+<pre><code>@misc{bustamante2026words,
+  author = {Bustamante, Pablo},
+  title  = {From Words to Walk Cycles: Learned 2D Generation versus
+            Disposable 3D Proxies for Eight-Direction Pixel-Art Sprites},
+  note   = {Preprint draft},
+  year   = {2026}
+}</code><button class="copy" type="button">Copy</button></pre>
+
+<footer>Both routes were developed with the assistance of Claude (Anthropic): Route A on an NVIDIA RTX 3090, Route B and this draft on an Apple M5. All models ran locally. The LaTeX source and the PDF are in <code>pixelart/paper/</code>.</footer>
+</div>
+
+<script>
+  (function () {
+    var visor = document.getElementById("visor"), grande = document.getElementById("grande"), num = document.getElementById("num"), n = 1;
+    function mostrar(k) {
+      n = Math.min(8, Math.max(1, k));
+      grande.src = "pag/g-" + n + ".jpg";
+      num.textContent = "Page " + n + " of 8";
+    }
+    document.querySelectorAll("#paginas button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        mostrar(+b.dataset.n);
+        if (visor.showModal) { visor.showModal(); } else { visor.setAttribute("open", ""); }
+      });
+    });
+    document.getElementById("ant").addEventListener("click", function () { mostrar(n - 1); });
+    document.getElementById("sig").addEventListener("click", function () { mostrar(n + 1); });
+    document.getElementById("cerrar").addEventListener("click", function () { visor.close ? visor.close() : visor.removeAttribute("open"); });
+    visor.addEventListener("click", function (e) { if (e.target === visor) { visor.close(); } });
+    document.addEventListener("keydown", function (e) {
+      if (!visor.open) return;
+      if (e.key === "ArrowRight") mostrar(n + 1);
+      if (e.key === "ArrowLeft") mostrar(n - 1);
+    });
+    document.querySelectorAll(".copy").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var code = b.parentElement.querySelector("code"), texto = code.innerText.trim();
+        function ok() { b.textContent = "Copied"; b.dataset.ok = "1"; setTimeout(function () { b.textContent = "Copy"; b.dataset.ok = ""; }, 1600); }
+        function aMano() { try { var r = document.createRange(); r.selectNodeContents(code); var s = getSelection(); s.removeAllRanges(); s.addRange(r); } catch (e) {} b.textContent = "Select and copy"; }
+        try { navigator.clipboard.writeText(texto).then(ok, aMano); } catch (e) { aMano(); }
+      });
+    });
+  })();
+</script>
+</body>
+</html>
